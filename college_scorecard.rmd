@@ -1,0 +1,209 @@
+---
+title: "College Scorecard Notes"
+output: html_notebook
+---
+
+Data from Department of Energy's [College Scorecard](https://collegescorecard.ed.gov/data/).  It's called raw data but it is not the rawest - it's been aggregated to the school level, but contains a lot of information.  Many variables' means, medians, and five quintiles are reported even though individual student data isn't available.
+
+Not each year has data for each variable, they changed what they collected over the years.
+
+NA's are called NULL's.
+
+Start with one file for now, the latest year that has the information I want is 12-13. 
+To do: Join all the files - each school has a unique ID. Look at time dependence, or select schools that have been in top N for m years.
+
+This is the data selection. 
+```{r warning=FALSE}
+# get one file for now from 11-12
+data <- read.csv("../college_data/MERGED2011_12_PP.csv", na.strings = "NULL")
+
+# variables to selet
+colNames <- c("MD_EARN_WNE_P10", "MD_EARN_WNE_P6", "MN_EARN_WNE_P6", "MN_EARN_WNE_P10",
+               "MD_FAMINC", "DEP_INC_AVG", "IND_INC_AVG",
+              "MN_EARN_WNE_INDEP0_P10", "MN_EARN_WNE_INDEP1_P10")
+
+colNums <- match(colNames, names(data))
+
+four_year <- data %>%
+  #na.omit() %>%
+  filter(ICLEVEL == 1) %>%
+  select(colNums) %>%
+  filter(complete.cases(.)) %>%
+  distinct()
+
+
+# convert factors to numeric
+four_year[colNames] <- sapply(four_year[colNames], as.character)
+four_year[colNames] <- sapply(four_year[colNames], as.numeric)
+
+#remove newly introduced NAs by numericizing
+four_year <- na.omit(four_year)
+```
+
+Want a metric to the effect of 'this school produces good earners.' Picking one number, say above 50k, would not account for correlation between family income and college grad income. Make a very rudimentary first order correction for this - plots below show mean income 10 years after enrollment as a function of family income at time of enrollment. 
+
+```{r}
+# linear fit
+p_lin <- ggplot(four_year, aes(x = DEP_INC_AVG, y = MN_EARN_WNE_INDEP0_P10)) + 
+  geom_point(alpha = 0.2, color = "blue") + 
+  geom_smooth(method = "lm", formula = y ~ x, color = "red") + 
+  xlab("Mean family income (2015 $s)") +
+  ylab("Mean earning 10 years after enrollment (2015 $s)")
+
+
+p_lin
+```
+
+Low income students all fall under the line.  Not surprising, and not *that* telling - their adult earnings likely surpass their parents' later in life. The plan is to cut above this line - don't want to lose these points.  Fit default smooth?
+
+```{r}
+p2 <- ggplot(four_year, aes(x = DEP_INC_AVG, y = MN_EARN_WNE_INDEP0_P10)) + 
+  geom_point(alpha = 0.2, color = "blue") + 
+  geom_smooth(color = "red") + 
+  xlab("Mean family income (2015 $s)") +
+  ylab("Mean earning 10 years after enrollment (2015 $s)")
+p2
+```
+
+That's basically three lines.  (Well, ok.  Not really.)  Let's see anyway.  Lines may be easier to cut on.
+```{r}
+# Add facet for parents' income bracket
+four_year <- mutate(four_year, fam_bracket = ifelse(DEP_INC_AVG < 30000, "Low",
+                        ifelse(DEP_INC_AVG > 75000, "High", "Mid")))
+
+# Make facets into factors - orders better in ggplot
+four_year$fam_bracket_f <- factor(four_year$fam_bracket, levels = c("Low", "Mid", "High"))
+
+p_bracket <- ggplot(four_year, aes(x = DEP_INC_AVG, y = MN_EARN_WNE_INDEP0_P10)) + 
+  geom_point(alpha = 0.2, color = "blue") + 
+  geom_smooth(method = "lm", formula = y ~ x, color = "red") + 
+  xlab("Mean family income (2015 $s)") +
+  ylab("Mean earning 10 years after enrollment (2015 $s)") +
+  facet_grid(. ~ fam_bracket_f, scale = "free")
+
+p_bracket
+```
+
+This is somewhat meaningful, but the dots are schools, not students. The goal was to come up with a non-horizontal line above which one might call 'alumni make good money' without biasing against low income. A bit of an arbitrary cut - will need to investigate further what I am leaving out. 
+
+Turns out it's difficult to extract the fit results from ggplot. (Some hacky ways on stack overflow, but do the fits standalone instead).
+
+Here are the three lines:
+```{r}
+fitLo <- lm(formula = MN_EARN_WNE_INDEP0_P10 ~ DEP_INC_AVG, 
+          data = four_year, fam_bracket_f == "Low")
+summary(fitLo)
+```
+
+```{r}
+fitMd <- lm(formula = MN_EARN_WNE_INDEP0_P10 ~ DEP_INC_AVG, 
+            data = four_year, fam_bracket_f == "Mid")
+summary(fitMd)
+```
+
+```{r}
+fitHi <- lm(formula = MN_EARN_WNE_INDEP0_P10 ~ DEP_INC_AVG, 
+            data = four_year, fam_bracket_f == "High")
+summary(fitHi)
+
+```
+
+The goodness of these is not a big deal - they are somewhat arbitrary lines, and not actually used as a fit result. Let's make sure that these are the same as what ggplot gave. 
+
+```{r}
+# get the slope and intercept into its own df, kind of hacky to get legend right
+
+df <- data.frame(m = c(summary(fitLo)$coeff[2], 
+                           summary(fitMd)$coeff[2],
+                           summary(fitHi)$coeff[2]),
+                 b = c(summary(fitLo)$coeff[1],
+                               summary(fitMd)$coeff[1], 
+                               summary(fitHi)$coeff[1]),
+                 br = c("Low", "Mid", "High"))
+
+p_bracket_manual <- ggplot(four_year, aes(x = DEP_INC_AVG, 
+                                          y = MN_EARN_WNE_INDEP0_P10)) + 
+  geom_point(alpha = 0.2) + 
+  geom_abline(aes(slope = m, intercept = b, color = br),size = 1, data = df) +
+  xlab("Mean family income (2015 $s)") +
+  ylab("Mean earning 10 years after enrollment (2015 $s)") +
+  facet_grid(. ~ fam_bracket_f, scale = "free")
+p_bracket_manual
+
+```
+
+The lines are the same: Good. This plot is ugly at the moment, but plotting all the lines on all the brackets was informative. 
+
+* Low income students more likely than mid or high to do better than their parents, which makes their standard of doing better than their parents too high a bar for mid to hihg income students.
+* Mid and high income students bracket widths get cut righ in the middle, causing ill fits.  One option is to come up with a better binning, but this is the binning that the dataset aggregated many ready-to-use variables.  Long term - do my own binning and use numbers, not means and percentiles from data. 
+* Bottom line: Stick with original plan to select above each bracket's line.
+
+
+```{r}
+# Simple function to determine if graduates of school 
+# are considered good earners
+good_earner <- function(y, x, bracket){
+  slope = fits[fits$br == bracket,"m"]
+  #print(slope)
+  intercept = fits[fits$br == bracket,"b"]
+  #print(intercept)
+  
+  if (y >= slope*x + intercept){
+    #print("True")
+    return(TRUE)
+  } 
+  else{
+    #print("False")
+    return(FALSE)
+    }
+}
+
+# test <- good_earner(2000, 20000, "Low")
+
+# Select schools that produce good earners
+four_year_earn <- four_year %>%
+  rowwise() %>%
+  mutate(earnings = ifelse(good_earner(MN_EARN_WNE_INDEP0_P10,
+                                            DEP_INC_AVG,
+                                            fam_bracket),"Above", "Below"))
+
+# Keep only the IDs of the good earning schools
+good_earn_id <- four_year_earn %>%
+  filter(earnings == "Above") %>%
+  select(OPEID, OPEID6, fam_bracket)
+                    
+# Bind this with full dataset to keep only the good schools but all variables
+good_schools <- merge(data, good_earn_id, by=c("OPEID","OPEID6"))
+good_schools <- subset(good_schools, !duplicated(good_schools[,"OPEID"]))
+
+```
+
+Let's check that the remaining data is above the cut line.
+```{r}
+p_good <- ggplot(four_year_earn, aes(x = DEP_INC_AVG, 
+                                          y = MN_EARN_WNE_INDEP0_P10)) + 
+  geom_point(alpha = 0.2) + 
+  geom_abline(aes(slope = m, intercept = b, color = br),size = 1, data = df) +
+  xlab("Mean family income (2015 $s)") +
+  ylab("Mean earning 10 years after enrollment (2015 $s)") +
+  facet_grid(. ~ fam_bracket_f, scale = "free")
+p_good
+
+```
+
+Seems to have worked! The selection is greater than or equal to - that's why there are dots in the boundary.
+
+Now things to explore out of these schools... Ideas:
+
+* Schools with greatest percentage of some population: first gen, minority, Pell recipient, women, men
+* Schools' percentage of majors in STEM
+
+The idea is to create something like a good fit recommendation given some characteristics and preferences of a prospective student.  The selection on earnings took care of the 'will I earn enough' (theoretically... and very loosely) so now of these schools, which are best at what or for whom.  
+
+The other idea is to characterize schools that produce good earners.  What correlations exist between earnings and major, minority status, geography, etc.
+
+
+
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
+
+<!-- When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file). -->
