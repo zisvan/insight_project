@@ -191,15 +191,87 @@ p_good
 
 Seems to have worked! The selection is greater than or equal to - that's why there are dots in the boundary.
 
-Now things to explore out of these schools... Ideas:
+One thing to note is that this is not a robust definition of producing good earner by any means.  Next iteration of analysis needs to include a (much) better selection method than this arbitrary line.  But let's keep going with building the skeleton.
 
-* Schools with greatest percentage of some population: first gen, minority, Pell recipient, women, men
-* Schools' percentage of majors in STEM
+Can I predict schools that will produce good earners?
 
-The idea is to create something like a good fit recommendation given some characteristics and preferences of a prospective student.  The selection on earnings took care of the 'will I earn enough' (theoretically... and very loosely) so now of these schools, which are best at what or for whom.  
+```{r}
+gradVars <- c("C150_4", #completion rate
+              "COSTT4_A", #average cost of attendance academic year
+              "TUITFTE", #Net tuition revenue per full-time equivalent student
+              "INEXPFTE", #Instructional expenditures per full-time equivalent student
+              "ADM_RATE", #Admission rate overall
+              "SAT_AVG", #Average SAT equivalent score of students admitted
+              "UGDS", #Enrollment of all undergraduate students
+              "AVGFACSAL", #Average faculty salary
+              "PFTFAC", #Ratio of full-time faculty
+              "DEBT_MDN", #Median debt
+              "PAR_ED_PCT_1STGEN", #percentage of first-gen students
+              "earnings" #Earnings Above or Below
+)
+```
 
-The other idea is to characterize schools that produce good earners.  What correlations exist between earnings and major, minority status, geography, etc.
+TO DO: This list of parameters have been chosen extremly subjectively.  I selected them by scrolling down the data dictionary.  I deliberately avoided potentially good predictors such as race because I want to find school parameters, not social ones. Future iterations need to more quantitatively onbectively make this selection, maybe clean up the data and throw a principle components analysis at it? I used the same set that I used to predict graduation rate.  
 
+```{r warning=FALSE}
+colGradVars <- match(gradVars, names(keep_schools))
+
+knnSample <- select(keep_schools, colGradVars)
+
+#convert all but earnings to numeric (they ae already chr)
+numeric.num <- match(gradVars[1:length(gradVars)-1], names(knnSample))
+knnSample[numeric.num] <- sapply(knnSample[numeric.num], as.numeric)
+
+#remove NAs from converting
+knnSample <- knnSample[complete.cases(knnSample),]
+
+
+#normalize columns to same scale
+normalize <- function(x){
+  if(!is.numeric(x)){
+    return(x)
+  }else{
+    norm_x <- (x-min(x))/(max(x) - min(x))
+    return(norm_x)    
+  }
+}
+
+knnNorm <- as.data.frame(sapply(knnSample, normalize))
+
+
+#training and test samples
+# Sample into training and test sets
+set.seed(123)
+trn <- sample(seq_len(nrow(knnNorm)), size = floor(.75 * nrow(knnNorm)))
+
+train <- knnNorm[trn, ]
+test <- knnNorm[-trn, ]
+
+#run knn
+kn <- floor(sqrt(nrow(train)))
+pred.knn <- knn(train = train[, 1:11], test = test[, 1:11], cl = train[, 12],
+                   k = kn)
+
+
+
+table(test[,12],pred.knn)
+prop.table(table(test[,12],pred.knn))
+```
+Bad.  Biases heavily towards Below.  Manually check a few other k's.
+
+```{r}
+pred.knn_5 <- knn(train = train[, 1:11], test = test[, 1:11], cl = train[, 12],
+                k = 5)
+pred.knn_11 <- knn(train = train[, 1:11], test = test[, 1:11], cl = train[, 12],
+                k = 11)
+pred.knn_19 <- knn(train = train[, 1:11], test = test[, 1:11], cl = train[, 12],
+                k = 19)
+table(test[,12],pred.knn_5)
+table(test[,12],pred.knn_11)
+table(test[,12],pred.knn_19)
+```
+
+They perform about equally well.  To answer the hard question - out of these (then, out of more variables) which ones are predictive. 
 
 
 <!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->

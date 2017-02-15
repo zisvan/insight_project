@@ -2,41 +2,65 @@ setwd("/Users/zisvan/insight_project/")
 
 library(dplyr)
 library(ggplot2)
+library(class)
 
-keep_schools <- read.csv("../college_data/keep_schools.csv")
+keep_schools <- read.csv("../college_data/keep_schools.csv", na.strings = "NULL", 
+                         stringsAsFactors =  FALSE)
 
-admissions <- c("ADM_RATE", "ADM_RATE_ALL",
-                "SATVR25","SATVR75", "SATMT25", "SATMT75","SATWR25", "SATWR75",
-                "SATVRMID", "SATMTMID", "SATWRMID",
-                "ACTCM25", "ACTCM75", "ACTEN25", "ACTEN75",
-                "ACTMT25", "ACTMT75", "ACTWR25","ACTWR75", "ACTCMMID",
-                "ACTENMID", "ACTMTMID", "ACTWRMID", "SAT_AVG",
-                "earnings", "fam_bracket_f")
+gradVars <- c("C150_4", #completion rate
+              "COSTT4_A", #average cost of attendance academic year
+              "TUITFTE", #Net tuition revenue per full-time equivalent student
+              "INEXPFTE", #Instructional expenditures per full-time equivalent student
+              "ADM_RATE", #Admission rate overall
+              "SAT_AVG", #Average SAT equivalent score of students admitted
+              "UGDS", #Enrollment of all undergraduate students
+              "AVGFACSAL", #Average faculty salary
+              "PFTFAC", #Ratio of full-time faculty
+              "DEBT_MDN", #Median debt
+              "PAR_ED_PCT_1STGEN", #percentage of first-gen students
+              "earnings" #Earnings Above or Below
+)
 
-colAdm <- match(admissions, names(data))
+colGradVars <- match(gradVars, names(keep_schools))
+
+knnSample <- select(keep_schools, colGradVars)
+
+#convert all but earnings to numeric (they ae already chr)
+numeric.num <- match(gradVars[1:length(gradVars)-1], names(knnSample))
+knnSample[numeric.num] <- sapply(knnSample[numeric.num], as.numeric)
+
+#remove NAs from converting
+knnSample <- knnSample[complete.cases(knnSample),]
+
+#normalize columns to same scale
+normalize <- function(x){
+  if(!is.numeric(x)){
+    return(x)
+  }else{
+    norm_x <- (x-min(x))/(max(x) - min(x))
+    return(norm_x)    
+  }
+}
+
+knnNorm <- as.data.frame(sapply(knnSample, normalize))
 
 
-by_admission <- df %>%
-  select(colAdm) %>%
-  #filter(complete.cases(.)) %>%
-  group_by(earnings, fam_bracket_f) %>%
-  summarize(count = n())
+#training and test samples
+# Sample into training and test sets
+set.seed(123)
+trn <- sample(seq_len(nrow(knnNorm)), size = floor(.75 * nrow(knnNorm)))
 
-###########################################################################
-## Below this line is play - not working entirely, and calls objects from 
-## workspace that are not explicitly included here
+train <- knnNorm[trn, ]
+test <- knnNorm[-trn, ]
 
-p <- ggplot(data = keep_schools, aes(y = SAT_AVG, x = fam_bracket_f, color = earnings)) +
-  geom_boxplot(na.rm = TRUE)
+#run knn
+kn <- floor(sqrt(nrow(train)))
+pred.knn <- knn(train = train[, 1:11], test = test[, 1:11], cl = train[, 12],
+                   k = kn)
 
-p2 <- ggplot(data = subset(keep_schools, PCIP14 > 0), aes(y = PCIP14, x = fam_bracket_f, color = earnings)) 
-p2 + geom_boxplot()
 
-##
-ethnicity <- c("UGDS_WHITE","UGDS_BLACK", "UGDS_HISP",  "UGDS_ASIAN", "UGDS_AIAN",
-               "UGDS_NHPI", "UGDS_2MOR", "UGDS_NRA","UGDS_UNKN")
+table(test[,12],pred.knn)
+prop.table(table(test[,12],pred.knn))
 
-by_ethnicity <- keep_schools %>%
-  rowwise() %>%
-  mutate(non_white = sum(UGDS_BLACK, UGDS_HISP, UGDS_ASIAN, UGDS_AIAN, UGDS_NHPI),
-         minority_ratio = non_white/(UGDS_WHITE + non_white)) 
+#
+

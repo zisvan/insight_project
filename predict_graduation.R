@@ -54,3 +54,4 @@ kn <- floor(sqrt(nrow(train)))
 pred.knn <- knn(train = train[, 2:11], test = test[, 2:11], cl = train[, 12],
                    k = kn)
 
+
