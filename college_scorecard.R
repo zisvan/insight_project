@@ -108,4 +108,4 @@ keep_schools <- subset(keep_schools, !duplicated(keep_schools[,"OPEID"]))
 # Write this small(er) file
 # It's still not too small - I'll select and remove NA's once analysis variables 
 # are determined
-write.csv(keep_schools, file = "keep_schools.csv", row.names = FALSE)
+write.csv(keep_schools, file = "C:/Users/zisvan/college_data/keep_schools.csv", row.names = FALSE)

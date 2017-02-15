@@ -15,10 +15,10 @@ To do: Join all the files - each school has a unique ID. Look at time dependence
 This is the data selection. 
 ```{r warning=FALSE}
 # get one file for now from 11-12
-data <- read.csv("../college_data/MERGED2011_12_PP.csv", na.strings = "NULL")
+# data <- read.csv("../college_data/MERGED2011_12_PP.csv", na.strings = "NULL")
 
 # variables to selet
-colNames <- c("MD_EARN_WNE_P10", "MD_EARN_WNE_P6", "MN_EARN_WNE_P6", "MN_EARN_WNE_P10",
+colNames <- c("OPEID","OPEID6","MD_EARN_WNE_P10", "MD_EARN_WNE_P6", "MN_EARN_WNE_P6", "MN_EARN_WNE_P10",
                "MD_FAMINC", "DEP_INC_AVG", "IND_INC_AVG",
               "MN_EARN_WNE_INDEP0_P10", "MN_EARN_WNE_INDEP1_P10")
 
@@ -113,18 +113,18 @@ The goodness of these is not a big deal - they are somewhat arbitrary lines, and
 ```{r}
 # get the slope and intercept into its own df, kind of hacky to get legend right
 
-df <- data.frame(m = c(summary(fitLo)$coeff[2], 
+fits <- data.frame(m = c(summary(fitLo)$coeff[2], 
                            summary(fitMd)$coeff[2],
                            summary(fitHi)$coeff[2]),
-                 b = c(summary(fitLo)$coeff[1],
+                  b = c(summary(fitLo)$coeff[1],
                                summary(fitMd)$coeff[1], 
                                summary(fitHi)$coeff[1]),
-                 br = c("Low", "Mid", "High"))
+                  br = c("Low", "Mid", "High"))
 
 p_bracket_manual <- ggplot(four_year, aes(x = DEP_INC_AVG, 
                                           y = MN_EARN_WNE_INDEP0_P10)) + 
   geom_point(alpha = 0.2) + 
-  geom_abline(aes(slope = m, intercept = b, color = br),size = 1, data = df) +
+  geom_abline(aes(slope = m, intercept = b, color = br),size = 1, data = fits) +
   xlab("Mean family income (2015 $s)") +
   ylab("Mean earning 10 years after enrollment (2015 $s)") +
   facet_grid(. ~ fam_bracket_f, scale = "free")
@@ -160,30 +160,28 @@ good_earner <- function(y, x, bracket){
 
 # test <- good_earner(2000, 20000, "Low")
 
-# Select schools that produce good earners
+# add earning column
 four_year_earn <- four_year %>%
   rowwise() %>%
   mutate(earnings = ifelse(good_earner(MN_EARN_WNE_INDEP0_P10,
                                             DEP_INC_AVG,
-                                            fam_bracket),"Above", "Below"))
+                                            fam_bracket),"Above", "Below")) 
 
-# Keep only the IDs of the good earning schools
-good_earn_id <- four_year_earn %>%
-  filter(earnings == "Above") %>%
-  select(OPEID, OPEID6, fam_bracket)
+# Get IDs of selection so far to bind to full dataset
+earn_id <- four_year_earn %>%
+  select(OPEID, OPEID6, fam_bracket_f, earnings)
                     
-# Bind this with full dataset to keep only the good schools but all variables
-good_schools <- merge(data, good_earn_id, by=c("OPEID","OPEID6"))
-good_schools <- subset(good_schools, !duplicated(good_schools[,"OPEID"]))
-
+# Bind this with full dataset to keep only the selected schools but all variables
+keep_schools <- merge(data, earn_id, by=c("OPEID","OPEID6"))
+keep_schools <- subset(keep_schools, !duplicated(keep_schools[,"OPEID"]))
 ```
 
 Let's check that the remaining data is above the cut line.
 ```{r}
-p_good <- ggplot(four_year_earn, aes(x = DEP_INC_AVG, 
+p_good <- ggplot(data = subset(four_year_earn, earnings=="Above"), aes(x = DEP_INC_AVG, 
                                           y = MN_EARN_WNE_INDEP0_P10)) + 
   geom_point(alpha = 0.2) + 
-  geom_abline(aes(slope = m, intercept = b, color = br),size = 1, data = df) +
+  geom_abline(aes(slope = m, intercept = b, color = br),size = 1, data = fits) +
   xlab("Mean family income (2015 $s)") +
   ylab("Mean earning 10 years after enrollment (2015 $s)") +
   facet_grid(. ~ fam_bracket_f, scale = "free")
