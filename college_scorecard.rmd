@@ -2,7 +2,7 @@
 title: "College Scorecard Notes"
 output: html_notebook
 ---
-
+### Data
 Data from Department of Energy's [College Scorecard](https://collegescorecard.ed.gov/data/).  It's called raw data but it is not the rawest - it's been aggregated to the school level, but contains a lot of information.  Many variables' means, medians, and five quintiles are reported even though individual student data isn't available.
 
 Not each year has data for each variable, they changed what they collected over the years.
@@ -40,6 +40,7 @@ four_year[colNames] <- sapply(four_year[colNames], as.numeric)
 four_year <- na.omit(four_year)
 ```
 
+### Select good earners
 Want a metric to the effect of 'this school produces good earners.' Picking one number, say above 50k, would not account for correlation between family income and college grad income. Make a very rudimentary first order correction for this - plots below show mean income 10 years after enrollment as a function of family income at time of enrollment. 
 
 ```{r}
@@ -193,7 +194,8 @@ Seems to have worked! The selection is greater than or equal to - that's why the
 
 One thing to note is that this is not a robust definition of producing good earner by any means.  Next iteration of analysis needs to include a (much) better selection method than this arbitrary line.  But let's keep going with building the skeleton.
 
-Can I predict schools that will produce good earners?
+### Predict good schools?
+Can I predict schools that will produce good earners?  R has a built in knn function - start there.
 
 ```{r}
 gradVars <- c("C150_4", #completion rate
@@ -211,7 +213,7 @@ gradVars <- c("C150_4", #completion rate
 )
 ```
 
-TO DO: This list of parameters have been chosen extremly subjectively.  I selected them by scrolling down the data dictionary.  I deliberately avoided potentially good predictors such as race because I want to find school parameters, not social ones. Future iterations need to more quantitatively onbectively make this selection, maybe clean up the data and throw a principle components analysis at it? I used the same set that I used to predict graduation rate.  
+**TO DO:** This list of parameters have been chosen extremly subjectively.  I selected them by scrolling down the data dictionary.  I deliberately avoided potentially good predictors such as race because I want to find school parameters, not social ones. Future iterations need to more quantitatively onbectively make this selection, maybe clean up the data and throw a principle components analysis at it? I used the same set that I used to predict graduation rate.  
 
 ```{r warning=FALSE}
 colGradVars <- match(gradVars, names(keep_schools))
@@ -257,7 +259,7 @@ pred.knn <- knn(train = train[, 1:11], test = test[, 1:11], cl = train[, 12],
 table(test[,12],pred.knn)
 prop.table(table(test[,12],pred.knn))
 ```
-Bad.  Biases heavily towards Below.  Manually check a few other k's.
+Not very good.  Biases heavily towards Below.  Manually check a few other k's.
 
 ```{r}
 pred.knn_5 <- knn(train = train[, 1:11], test = test[, 1:11], cl = train[, 12],
@@ -273,6 +275,28 @@ table(test[,12],pred.knn_19)
 
 They perform about equally well.  To answer the hard question - out of these (then, out of more variables) which ones are predictive. 
 
+### Improve kNN
+
+This biserial correlation function seems potentially useful.  Here's some play with it.  
+
+**TO DO:** Determine which variables to use in the knn - I don't yet understand this function well enough.  
+```{r}
+#calculate correlation between each variable and earnings
+bicorr <- c()
+for(i in 1:11){
+  bicorr[i] <- biserial.cor(knnNorm[,i], knnNorm[,12])
+}
+
+bi_df <- as.data.frame(bicorr)
+rownames(bi_df) <- names(knnNorm[,1:11])
+bi_df <- cbind(Variable = rownames(bi_df), bi_df)
+rownames(bi_df) <- NULL
+
+bi_df <- arrange(bi_df, desc(abs(bicorr)))
+bi_df
+```
+
+With this set of variables, try to find combinations that work better. 
 
 <!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
 

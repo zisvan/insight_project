@@ -25,7 +25,7 @@ colGradVars <- match(gradVars, names(keep_schools))
 
 knnSample <- select(keep_schools, colGradVars)
 
-#convert all but earnings to numeric (they ae already chr)
+#convert all but earnings to numeric (they are already chr)
 numeric.num <- match(gradVars[1:length(gradVars)-1], names(knnSample))
 knnSample[numeric.num] <- sapply(knnSample[numeric.num], as.numeric)
 
@@ -38,11 +38,12 @@ normalize <- function(x){
     return(x)
   }else{
     norm_x <- (x-min(x))/(max(x) - min(x))
-    return(norm_x)    
+    return(norm_x)  
   }
 }
 
 knnNorm <- as.data.frame(sapply(knnSample, normalize))
+knnNorm[numeric.num] <- sapply(knnNorm[numeric.num], as.numeric)
 
 
 #training and test samples
@@ -58,9 +59,7 @@ kn <- floor(sqrt(nrow(train)))
 pred.knn <- knn(train = train[, 1:11], test = test[, 1:11], cl = train[, 12],
                    k = kn)
 
-
 table(test[,12],pred.knn)
 prop.table(table(test[,12],pred.knn))
 
-#
 
