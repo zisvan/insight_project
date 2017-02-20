@@ -296,7 +296,17 @@ bi_df <- arrange(bi_df, desc(abs(bicorr)))
 bi_df
 ```
 
-With this set of variables, try to find combinations that work better. 
+With this set of variables, try to find combinations that work better.
+
+improve_knn.R tries all combinations of 3-11 parameters out of these 11: a total of 1981 samples) and orders them by knn accuracy.  The accuracies range between .75 and .57.  
+
+**TO DO**
+
+* Define "good earning" well and write a robust sample selector
+* Select predictor variables systematically
+* Other algorihtms than the built in kNN to predict "good earner"
+* What variables predict good schools for what subset of the population?
+
 
 <!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
 

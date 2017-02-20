@@ -18,6 +18,7 @@ gradVars <- c("C150_4", #completion rate
               "PFTFAC", #Ratio of full-time faculty
               "DEBT_MDN", #Median debt
               "PAR_ED_PCT_1STGEN", #percentage of first-gen students
+              "RET_FT4", #retention rate after one year
               "earnings" #Earnings Above or Below
 )
 
