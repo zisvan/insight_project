@@ -59,7 +59,7 @@ for(i in 1:length(trainList)){
   accuracy[i] <- cm$overall['Accuracy']
 }
 
-#Get best few results
+# Sort; Get best few results
 accsort <- sort(accuracy, index.return = TRUE, decreasing = TRUE)
 
 varsListSorted <- list()

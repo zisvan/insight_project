@@ -2,9 +2,6 @@ setwd("/Users/zisvan/insight_project/")
 
 library(dplyr)
 library(ggplot2)
-library(MASS)
-library(leaps)
-library(relaimpo)
 
 # files <- list.files(path = "../college_data/", pattern = "*.csv")
 
@@ -28,48 +25,25 @@ gradVars <- c("C150_4", #completion rate
 colGradVars <- match(gradVars, names(data))
 
 sample <- data %>%
-  filter(ICLEVEL == 1, # four year
-         DISTANCEONLY == 0 #not online-only
+  filter(ICLEVEL == 1, # four year college
+         DISTANCEONLY == 0 # not online-only
          ) %>%
-  select(colGradVars) %>%
+  dplyr::select(colGradVars) %>%
   filter(complete.cases(.))
 
 # convert factors to numeric
 sample$DEBT_MDN <- as.numeric(as.character(sample$DEBT_MDN))
 sample$PAR_ED_PCT_1STGEN <- as.numeric(as.character(sample$PAR_ED_PCT_1STGEN))
 
-#remove NA's
+#remove NA's from coercing numeric
 sample <- sample[complete.cases(sample),]
 
-# Determine what constitutes a good graduation rate
+# Add category of graduation rate +/- one sigma around mean
 meanRate <- mean(sample$C150_4)
 stdRate <- sqrt(var(sample$C150_4))
 # medianRate <- median(sample$C150_4)
 sample <- mutate(sample, gradRate = ifelse(C150_4 > (meanRate - stdRate), 
                                            (ifelse(C150_4 > (meanRate + stdRate), 
-                                                   "Good", "OK")), "Bad"))
+                                                   "High", "Average")), "Low"))
 
 
-# Determine what variables are strongly related
-
-lin <- lm(C150_4 ~ COSTT4_A + TUITFTE + INEXPFTE + ADM_RATE + SAT_AVG +
-            UGDS + AVGFACSAL + PFTFAC + DEBT_MDN + PAR_ED_PCT_1STGEN + RET_FT4,
-          data = sample)
-step <- stepAIC(lin, direction="both")
-
-
-# ALternatively
-attach(sample)
-leaps <- regsubsets(C150_4 ~ COSTT4_A + TUITFTE + INEXPFTE + ADM_RATE + SAT_AVG +
-            UGDS + AVGFACSAL + PFTFAC + DEBT_MDN + PAR_ED_PCT_1STGEN + RET_FT4,
-          data = sample, nbest = 5)
-
-# Relative importance
-# Calculate Relative Importance for Each Predictor
-calc.relimp(lin, type="lmg", rela=TRUE)
-
-# Bootstrap Measures of Relative Importance (1000 samples) 
-boot <- boot.relimp(lin, b = 100, type = "lmg", rank = TRUE, 
-                    diff = FALSE, rela = TRUE)
-# booteval.relimp(boot) # print result
-# plot(booteval.relimp(boot,sort=TRUE)) # plot result
